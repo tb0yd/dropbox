@@ -88,7 +88,7 @@ module Dropbox
       api_body :get, 'files', root(options), *rest
       #TODO streaming, range queries
     end
-    
+
     # Downloads a minimized thumbnail for a file. Pass the path to the file,
     # optionally the size of the thumbnail you want, and any additional options.
     # See https://www.dropbox.com/developers/docs#thumbnails for a list of valid
@@ -116,18 +116,18 @@ module Dropbox
     # Get the thumbnail for an image in the +medium+ size:
     #
     #  session.thumbnail('my/image.jpg', 'medium')
-    
+
     def thumbnail(*args)
       options = args.extract_options!
       path = args.shift
       size = args.shift
       raise ArgumentError, "thumbnail takes a path, an optional size, and optional options" unless path.kind_of?(String) and (size.kind_of?(String) or size.nil?) and args.empty?
-      
+
       path = path.sub(/^\//, '')
       rest = Dropbox.check_path(path).split('/')
       rest << { :ssl => @ssl }
       rest.last[:size] = size if size
-      
+
       begin
         api_body :get, 'thumbnails', root(options), *rest
       rescue Dropbox::UnsuccessfulResponseError => e
@@ -163,8 +163,13 @@ module Dropbox
         file = File.new(local_file)
         name = File.basename(local_file)
         local_path = local_file
+      elsif local_file.kind_of?(StringIO) then
+        raise(ArgumentError, "options must contain the :filename") unless options[:filename]
+        file = local_file
+        name = File.basename(options[:filename])
+        local_path = options[:filename]
       else
-        raise ArgumentError, "local_file must be a File or file path"
+        raise ArgumentError, "local_file must be a File, StringIO, or file path"
       end
 
       remote_path = remote_path.sub(/^\//, '')
@@ -188,7 +193,7 @@ module Dropbox
                                                        name,
                                                        local_path))
       request['authorization'] = oauth_signature.join(', ')
-      
+
       response = Net::HTTP.start(uri.host, uri.port) { |http| http.request(request) }
       if response.kind_of?(Net::HTTPSuccess) then
         begin
@@ -264,7 +269,7 @@ module Dropbox
     # +mode+:: Temporarily changes the API mode. See the MODES array.
     #
     # TODO The API documentation says this method returns 404 if the path does not exist, but it actually returns 5xx.
-    
+
     def delete(path, options={})
       path = path.sub(/^\//, '')
       path.sub! /\/$/, ''
@@ -388,7 +393,7 @@ module Dropbox
       #args.last[:hash] = options[:hash] if options[:hash]
       args.last[:list] = !(options[:suppress_list].to_bool)
       args.last[:ssl] = @ssl
-      
+
       begin
         parse_metadata(get(*args)).to_struct_recursively
       rescue UnsuccessfulResponseError => error
@@ -419,7 +424,7 @@ module Dropbox
       metadata(path, options.merge(:suppress_list => false)).contents
     end
     alias :ls :list
-    
+
     def event_metadata(target_events, options={}) # :nodoc:
       get 'event_metadata', :ssl => @ssl, :root => root(options), :target_events => target_events
     end
@@ -558,17 +563,17 @@ module Dropbox
   # limit.
 
   class TooManyEntriesError < FileError; end
-  
+
   # Raised when the event_metadata method returns an error.
-  
+
   class PingbackError < StandardError
     # The HTTP error code returned by the event_metadata method.
     attr_reader :code
-    
+
     def initialize(code) # :nodoc
       @code = code
     end
-    
+
     def to_s # :nodoc:
       "#{self.class.to_s} code #{@code}"
     end
